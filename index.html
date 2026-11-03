@@ -27,10 +27,12 @@
   .datos dd { margin: 0; color: #1A1A1A; }
   .qr { width: 96px; height: 96px; image-rendering: pixelated; flex: none; margin-top: 2px; }
   table { width: 100%; border-collapse: collapse; margin-top: 30px; border: 2px solid var(--linea); font-size: 14.5px; }
+  table.emb { margin-top: 44px; }
+  table.emb + table.art { margin-top: 30px; }
   th, td { border: 1px solid var(--linea); padding: 3px 6px; }
-  th { background: var(--beige); font-weight: 400; font-size: 16.5px; }
+  th { background: var(--beige); font-weight: 700; font-size: 15px; }
   td.c { text-align: center; }
-  tr.total td { background: var(--beige); font-size: 16.5px; border-top: 1px solid var(--linea); }
+  tr.total td { background: var(--beige); font-size: 16px; font-weight: 700; border-top: 1px solid var(--linea); }
   tr.total td.l { text-align: right; }
   .pie { font-style: italic; font-size: 11px; color: var(--gris); margin-top: 5px; }
   .acciones { text-align: center; margin: 16px 0 0; }
@@ -374,7 +376,8 @@ function qrPenalty(m) {
 
 function dec(s) { try { return decodeURIComponent((s || "").replace(/\+/g, " ")); } catch (e) { return s || ""; } }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-function cant(n) { const x = Number(n); return isNaN(x) ? n : String(Math.round(x * 100) / 100).replace(".", ","); }
+function cant(n) { const x = Number(n); return (n === "" || isNaN(x)) ? n : String(Math.round(x * 100) / 100); }
+function med(n) { const x = Number(n); return (n === "" || isNaN(x)) ? (n || "-") : x.toFixed(2); }
 
 function qrDataUrl(texto) {
   const m = qrEncode(utf8(texto), ECC_L);
@@ -392,9 +395,12 @@ function leer() {
   const h = location.hash.replace(/^#/, "");
   if (!h) return null;
   const p = h.split("!");
-  if (p[0] !== "1" || p.length < 8) return null;
-  const items = (p[7] ? p[7].split("~") : []).map(t => { const f = t.split("*"); return { cod: dec(f[0]), desc: dec(f[1]), cant: dec(f[2]) }; });
-  return { pl: dec(p[1]), n: p[2], total: p[3], packing: dec(p[4]), cliente: dec(p[5]), ref: dec(p[6]), items };
+  // formato 1: sin embalaje (etiquetas antiguas); formato 2: con tipo, medidas y peso del bulto
+  let emb = null, ip = 7;
+  if (p[0] === "2" && p.length >= 13) { emb = { tipo: dec(p[7]), l: dec(p[8]), w: dec(p[9]), h: dec(p[10]), g: dec(p[11]) }; ip = 12; }
+  else if (p[0] !== "1" || p.length < 8) return null;
+  const items = (p[ip] ? p[ip].split("~") : []).map(t => { const f = t.split("*"); return { cod: dec(f[0]), desc: dec(f[1]), cant: dec(f[2]) }; });
+  return { pl: dec(p[1]), n: p[2], total: p[3], packing: dec(p[4]), cliente: dec(p[5]), ref: dec(p[6]), emb, items };
 }
 
 function dibujar() {
@@ -419,7 +425,11 @@ function dibujar() {
     '<dt>Ref. Cliente:</dt><dd>' + esc(d.ref || "-") + '</dd>' +
     '<dt>Contenido:</dt><dd>' + d.items.length + ' \u00edtem(s) / ' + cant(suma) + uni + '</dd></dl></div>' +
     '<img class="qr" alt="QR" src="' + qrDataUrl(location.href) + '"></div>' +
-    '<table><colgroup><col style="width:34px"><col style="width:122px"><col><col style="width:104px"></colgroup>' +
+    (d.emb ? '<table class="emb"><colgroup><col style="width:27%"><col><col><col><col style="width:20%"></colgroup>' +
+      '<thead><tr><th>Type / Material</th><th>Lenght (m)</th><th>Width (m)</th><th>Height (m)</th><th>Gross weight (kg)</th></tr></thead>' +
+      '<tbody><tr><td class="c">' + esc(d.emb.tipo || "-") + '</td><td class="c">' + esc(med(d.emb.l)) + '</td><td class="c">' + esc(med(d.emb.w)) +
+      '</td><td class="c">' + esc(med(d.emb.h)) + '</td><td class="c">' + esc(med(d.emb.g)) + '</td></tr></tbody></table>' : '') +
+    '<table class="art"><colgroup><col style="width:34px"><col style="width:122px"><col><col style="width:104px"></colgroup>' +
     '<thead><tr><th>N\u00b0</th><th>C\u00f3digo</th><th>Descripci\u00f3n</th><th>Cantidad</th></tr></thead>' +
     '<tbody>' + filas + '<tr class="total"><td class="l" colspan="3">TOTAL UNIDADES EN ESTE BULTO</td><td class="c">' + cant(suma) + '</td></tr></tbody></table>' +
     '<div class="pie">Escanee el c\u00f3digo QR para ver el contenido del bulto sin abrirlo.&nbsp;&nbsp; ' + esc(d.pl) + ' - Bulto ' + esc(d.n) + ' de ' + esc(d.total) + '</div>';
